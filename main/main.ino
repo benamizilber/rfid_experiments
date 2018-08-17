@@ -54,9 +54,9 @@ bool is_id0_equal(byte* id1, byte* id2) {
 
 #define NUM_CARDS_IN_GAME 7
 #define MAX_CARDS_IN_HAND 3
+#define MIN_CARDS_IN_HAND 2
 #define ID_LEN 4
 #define CYCLE_TIME_FOR_A_CARD_MS 20
-#define MIN_CARDS_IN_HAND 2
 
 byte card_ids[NUM_CARDS_IN_GAME][ID_LEN] =
 {
@@ -71,7 +71,7 @@ byte card_ids[NUM_CARDS_IN_GAME][ID_LEN] =
 
 MFRC522::Uid cards[NUM_CARDS_IN_GAME];
 
-int JOKER_VALUE = 1000;
+int JOKER_VALUE = 7;
 
 int index_to_value[NUM_CARDS_IN_GAME] { 8, 8, 
                                         2, 32,
@@ -290,24 +290,32 @@ void loop() {
   }
 
   bool someone_has_joker = false;
-  bool someone_has_group = false;
+  bool player_with_joker_has_group = false;
+  bool all_players_have_minimum_cards = true;
+  bool num_of_players_with_group = 0;
 
   for (int reader = 0; reader < NR_OF_READERS; reader++) {
+    bool player_has_joker = false;
     int32_t cards_value = 1;
     Serial.print("reader ");
     Serial.print(reader, DEC);
     Serial.print(" : ");
+    if (curr_seen_count[reader] < MIN_CARDS_IN_HAND) {
+      all_players_have_minimum_cards = false;
+    }
     for (int i = 0; i < curr_seen_count[reader]; i++) {
       cards_value *= card_value(curr_seen[reader][i]);
       Serial.print(curr_seen[reader][i].uidByte[0], DEC);
       Serial.print(" ");
     }
+    Serial.print("value: ");
     Serial.print(cards_value, DEC);
     Serial.print(" ");
-    if (cards_value > JOKER_VALUE) {
+    if (cards_value % JOKER_VALUE == 0) {
       Serial.print("joker");
       Serial.print(" ");
       digitalWrite(redLed[reader], HIGH);
+      player_has_joker = true;
       someone_has_joker = true;
       cards_value = cards_value / JOKER_VALUE;
     } else {
@@ -317,17 +325,31 @@ void loop() {
       Serial.print("group");
       Serial.print(" ");
       digitalWrite(blueLed[reader], HIGH);
-      someone_has_group = true;
+      if (player_has_joker) {
+        player_with_joker_has_group = true;
+      }
+      num_of_players_with_group++;
     } else {
       digitalWrite(blueLed[reader], LOW);
     }
     Serial.println();
   }
 
-  if (someone_has_joker && someone_has_group) {
+  if (all_players_have_minimum_cards && someone_has_joker) {
+    if ( (num_of_players_with_group == 1 && !player_with_joker_has_group) ||
+         (num_of_players_with_group > 1) ) {
       digitalWrite(yellowLed, HIGH);
+    } else {
+        digitalWrite(yellowLed, LOW);
+    }
   } else {
+    Serial.println("SET up is wrong");
+    for (int i = 0; i < 1000; i++) {
+      digitalWrite(yellowLed, HIGH);
+      delay(1);
       digitalWrite(yellowLed, LOW);
+      delay(10);
+    }
   }
 
   for (int i = 0; i < (23 - NR_OF_READERS - 1); i++) {
